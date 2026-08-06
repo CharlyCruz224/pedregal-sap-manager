@@ -96,7 +96,6 @@ st.markdown("""
 USERS_FILE = 'usuarios.csv'
 RESERVAS_FILE = 'historial_reservas.csv'
 
-# Asegurar archivo de usuarios correcto
 columnas_usuarios = ['usuario', 'password', 'rol']
 if not os.path.exists(USERS_FILE):
     pd.DataFrame({'usuario': ['admin'], 'password': ['Pedregal2026'], 'rol': ['Administrador']}).to_csv(USERS_FILE, index=False, sep=';')
@@ -125,7 +124,6 @@ def check_login(username, password):
     except:
         df_users = pd.read_csv(USERS_FILE, sep=';', dtype=str)
 
-    # Limpiar espacios en blanco en columnas por seguridad
     df_users.columns = df_users.columns.str.strip()
 
     if 'usuario' not in df_users.columns or 'password' not in df_users.columns:
@@ -386,7 +384,7 @@ else:
             if not all(col in df_dash.columns for col in columnas_requeridas):
                 df_dash = pd.DataFrame()
             else:
-                df_dash['Cantidad'] = pd.to_numeric(df_dash['Cantidad'], errors='coerce').fillna(1)
+                df_dash['Cantidad_num'] = pd.to_numeric(df_dash['Cantidad'], errors='coerce').fillna(1)
         except:
             df_dash = pd.DataFrame()
         
@@ -395,7 +393,7 @@ else:
             hoy_str = datetime.datetime.now().strftime("%Y-%m-%d")
             total_hoy = len(df_dash[df_dash['Fecha'] == hoy_str]) if 'Fecha' in df_dash.columns else 0
             m1.metric("Total Reservas Hoy", total_hoy)
-            m2.metric("Total Materiales Movidos", int(df_dash['Cantidad'].sum()) if 'Cantidad' in df_dash.columns else 0)
+            m2.metric("Total Materiales Movidos", int(df_dash['Cantidad_num'].sum()) if 'Cantidad_num' in df_dash.columns else 0)
             
             top_area = df_dash['Area'].mode()[0] if not df_dash.empty and 'Area' in df_dash.columns and not df_dash['Area'].mode().empty else "N/A"
             m3.metric("Área con más pedidos", top_area)
@@ -405,26 +403,38 @@ else:
             col_chart1, col_chart2 = st.columns(2)
             with col_chart1:
                 st.markdown("#### Distribución de Movimientos")
-                if 'Movimiento' in df_dash.columns and not df_dash['Movimiento'].empty:
+                if 'Movimiento' in df_dash.columns and not df_dash['Movimiento'].dropna().empty:
                     movs = df_dash['Movimiento'].value_counts()
-                    fig1, ax1 = plt.subplots(figsize=(4,3))
-                    ax1.pie(movs, labels=movs.index, autopct='%1.1f%%', colors=['#1E3A8A', '#10B981', '#6EE7B7'])
-                    fig1.patch.set_alpha(0)
-                    st.pyplot(fig1)
+                    if not movs.empty:
+                        fig1, ax1 = plt.subplots(figsize=(4,3))
+                        ax1.pie(movs, labels=movs.index, autopct='%1.1f%%', colors=['#1E3A8A', '#10B981', '#6EE7B7'])
+                        fig1.patch.set_alpha(0)
+                        st.pyplot(fig1)
+                    else:
+                        st.info("Sin datos de movimientos.")
+                else:
+                    st.info("Sin datos suficientes.")
                 
             with col_chart2:
                 st.markdown("#### Top Áreas Solicitantes")
-                if 'Area' in df_dash.columns and not df_dash['Area'].empty:
+                if 'Area' in df_dash.columns and not df_dash['Area'].dropna().empty:
                     areas = df_dash['Area'].value_counts().head(5)
-                    fig2, ax2 = plt.subplots(figsize=(4,3))
-                    areas.plot(kind='barh', color='#10B981', ax=ax2)
-                    ax2.set_xlabel('Cantidad de Reservas')
-                    fig2.patch.set_alpha(0)
-                    st.pyplot(fig2)
+                    if not areas.empty:
+                        fig2, ax2 = plt.subplots(figsize=(4,3))
+                        areas.plot(kind='barh', color='#10B981', ax=ax2)
+                        ax2.set_xlabel('Cantidad de Reservas')
+                        fig2.patch.set_alpha(0)
+                        st.pyplot(fig2)
+                    else:
+                        st.info("Sin datos de áreas.")
+                else:
+                    st.info("Sin datos suficientes.")
                 
             st.divider()
             st.subheader("📜 Historial Oficial de Registros (Solo Lectura)")
-            st.dataframe(df_dash, use_container_width=True, height=300)
+            # Mostramos el dataframe sin la columna auxiliar numérica interna
+            df_display = df_dash.drop(columns=['Cantidad_num'], errors='ignore')
+            st.dataframe(df_display, use_container_width=True, height=300)
         else:
             st.info("Aún no hay datos suficientes para mostrar métricas. Registra tu primera reserva. 🚀")
 
