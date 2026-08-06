@@ -319,7 +319,13 @@ else:
                             time.sleep(0.5)
                             st.rerun()
                     else:
-                        nuevo_id = int(df_historial['ID'].astype(int).max() + 1) if not df_historial.empty and 'ID' in df_historial.columns and not df_historial['ID'].dropna().empty else 1001
+                        # Cálculo seguro del próximo ID evitando errores por valores nulos o vacíos
+                        nuevo_id = 1001
+                        if not df_historial.empty and 'ID' in df_historial.columns:
+                            ids_num = pd.to_numeric(df_historial['ID'], errors='coerce').dropna()
+                            if not ids_num.empty:
+                                nuevo_id = int(ids_num.max() + 1)
+                        
                         nueva_reserva = {
                             'ID': str(nuevo_id),
                             'Fecha': datetime.datetime.now().strftime("%Y-%m-%d"),
@@ -432,7 +438,6 @@ else:
                 
             st.divider()
             st.subheader("📜 Historial Oficial de Registros (Solo Lectura)")
-            # Mostramos el dataframe sin la columna auxiliar numérica interna
             df_display = df_dash.drop(columns=['Cantidad_num'], errors='ignore')
             st.dataframe(df_display, use_container_width=True, height=300)
         else:
