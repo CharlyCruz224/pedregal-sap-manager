@@ -103,8 +103,15 @@ if not os.path.exists(RESERVAS_FILE):
     pd.DataFrame(columns=['ID', 'Fecha', 'Hora', 'PEP', 'Area', 'Movimiento', 'Material', 'Cantidad']).to_csv(RESERVAS_FILE, index=False, sep=';')
 
 def check_login(username, password):
-    df_users = pd.read_csv(USERS_FILE, sep=';')
-    user_match = df_users[(df_users['usuario'] == username) & (df_users['password'] == password)]
+    try:
+        # Intenta leer con punto y coma, y si falla o no encuentra columnas, prueba con coma
+        df_users = pd.read_csv(USERS_FILE, sep=';')
+        if 'usuario' not in df_users.columns:
+            df_users = pd.read_csv(USERS_FILE, sep=',')
+    except:
+        df_users = pd.read_csv(USERS_FILE, sep=',')
+
+    user_match = df_users[(df_users['usuario'].astype(str) == username) & (df_users['password'].astype(str) == password)]
     if not user_match.empty:
         st.session_state['logged_in'] = True
         st.session_state['username'] = username
