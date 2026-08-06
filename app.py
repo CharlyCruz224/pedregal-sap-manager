@@ -97,13 +97,13 @@ USERS_FILE = 'usuarios.csv'
 RESERVAS_FILE = 'historial_reservas.csv'
 
 if not os.path.exists(USERS_FILE):
-    pd.DataFrame({'usuario': ['admin'], 'password': ['Pedregal2026'], 'rol': ['Administrador']}).to_csv(USERS_FILE, index=False)
+    pd.DataFrame({'usuario': ['admin'], 'password': ['Pedregal2026'], 'rol': ['Administrador']}).to_csv(USERS_FILE, index=False, sep=';')
 
 if not os.path.exists(RESERVAS_FILE):
-    pd.DataFrame(columns=['ID', 'Fecha', 'Hora', 'PEP', 'Area', 'Movimiento', 'Material', 'Cantidad']).to_csv(RESERVAS_FILE, index=False)
+    pd.DataFrame(columns=['ID', 'Fecha', 'Hora', 'PEP', 'Area', 'Movimiento', 'Material', 'Cantidad']).to_csv(RESERVAS_FILE, index=False, sep=';')
 
 def check_login(username, password):
-    df_users = pd.read_csv(USERS_FILE)
+    df_users = pd.read_csv(USERS_FILE, sep=';')
     user_match = df_users[(df_users['usuario'] == username) & (df_users['password'] == password)]
     if not user_match.empty:
         st.session_state['logged_in'] = True
@@ -197,10 +197,8 @@ else:
         st.divider()
         st.subheader("🔍 Consultar Maestro de Lotes (Filtro en tiempo real)")
         try:
-            # Cargar desde la hoja correcta analizada en el Excel
             df_lotes = pd.read_excel('MAESTRO DE LOTES 2026 al 27.04.2026 - copia.xlsm', sheet_name='MAESTRO DE LOTES 2026')
             
-            # Filtro interactivo avanzado por texto en tiempo real
             b_variedad = st.text_input("🔍 Escribe variedad, lote o fundo para buscar de inmediato:", placeholder="Ej: Timpson, A01, T4...")
             if b_variedad:
                 mask = df_lotes.astype(str).apply(lambda x: x.str.contains(b_variedad, case=False, na=False)).any(axis=1)
@@ -221,7 +219,6 @@ else:
         try:
             df_sap = pd.read_excel('SOLICITANTES SAP - copia.xlsx', sheet_name=0)
             
-            # Buscador en tiempo real exacto y reactivo
             b_area = st.text_input("🔍 Digite el sub solicitante o área a buscar:", placeholder="Ej: Riego, Cosecha, G HIDRICA...")
             if b_area:
                 mask_sap = df_sap.astype(str).apply(lambda x: x.str.contains(b_area, case=False, na=False)).any(axis=1)
@@ -235,13 +232,15 @@ else:
             st.error(f"⚠️ No se pudo cargar 'SOLICITANTES SAP - copia.xlsx'. Detalle: {e}")
 
     # ------------------------------------------
-    # TAB 3: GESTIÓN DE RESERVAS (CON BOTONES EDITAR/ELIMINAR ABAJO)
+    # TAB 3: GESTIÓN DE RESERVAS
     # ------------------------------------------
     with tab3:
         st.header("Creación y Gestión de Reservas SAP")
-        df_historial = pd.read_csv(RESERVAS_FILE)
+        if os.path.exists(RESERVAS_FILE):
+            df_historial = pd.read_csv(RESERVAS_FILE, sep=';')
+        else:
+            df_historial = pd.DataFrame(columns=['ID', 'Fecha', 'Hora', 'PEP', 'Area', 'Movimiento', 'Material', 'Cantidad'])
         
-        # Modo Edición o Creación
         id_a_editar = st.session_state['editando_id']
         datos_edit = {}
         if id_a_editar is not None and not df_historial.empty:
@@ -271,20 +270,18 @@ else:
                     
                 if submit_reserva:
                     if id_a_editar is not None:
-                        # Actualizar registro existente
                         idx_to_update = df_historial[df_historial['ID'] == id_a_editar].index
                         df_historial.loc[idx_to_update, 'PEP'] = r_pep
                         df_historial.loc[idx_to_update, 'Area'] = r_area
                         df_historial.loc[idx_to_update, 'Movimiento'] = r_movimiento[:3]
                         df_historial.loc[idx_to_update, 'Material'] = r_material
                         df_historial.loc[idx_to_update, 'Cantidad'] = r_cantidad
-                        df_historial.to_csv(RESERVAS_FILE, index=False)
+                        df_historial.to_csv(RESERVAS_FILE, index=False, sep=';')
                         st.session_state['editando_id'] = None
                         st.success(f"¡Reserva #{id_a_editar} actualizada con éxito!")
                         time.sleep(0.5)
                         st.rerun()
                     else:
-                        # Crear nuevo registro
                         nuevo_id = int(df_historial['ID'].max() + 1) if not df_historial.empty and 'ID' in df_historial.columns and not pd.isna(df_historial['ID'].max()) else 1001
                         nueva_reserva = {
                             'ID': nuevo_id,
@@ -297,7 +294,7 @@ else:
                             'Cantidad': r_cantidad
                         }
                         df_historial = pd.concat([df_historial, pd.DataFrame([nueva_reserva])], ignore_index=True)
-                        df_historial.to_csv(RESERVAS_FILE, index=False)
+                        df_historial.to_csv(RESERVAS_FILE, index=False, sep=';')
                         st.balloons()
                         st.toast('¡Reserva registrada con éxito!', icon='🎉')
                         st.rerun()
@@ -308,23 +305,35 @@ else:
         
         if not df_historial.empty:
             for index, row in df_historial.iterrows():
+                # Conversión ultra segura del ID para evitar errores
+                raw_id = row.get('ID', index + 1)
+                try:
+                    row_id = int(raw_id) if pd.notna(raw_id) else index + 1
+                except:
+                    row_id = index + 1
+
                 cols = st.columns([1, 2, 2, 2, 1, 1, 1])
-                cols[0].write(f"**#{int(row.get('ID', index+1))}**")
+                cols[0].write(f"**#{row_id}**")
                 cols[1].write(str(row['Fecha']))
                 cols[2].write(str(row['Area']))
                 cols[3].write(str(row['Material']))
-                cols[4].write(f"Cant: {int(row['Cantidad'])}")
+                
+                try:
+                    cant_val = int(row['Cantidad']) if pd.notna(row['Cantidad']) else 1
+                except:
+                    cant_val = 1
+                cols[4].write(f"Cant: {cant_val}")
                 
                 # Botón Editar
-                if cols[5].button("✏️ Editar", key=f"edit_res_{row.get('ID', index)}"):
-                    st.session_state['editando_id'] = row.get('ID', index)
+                if cols[5].button("✏️ Editar", key=f"edit_res_{row_id}_{index}"):
+                    st.session_state['editando_id'] = row_id
                     st.rerun()
                 
                 # Botón Borrar
-                if cols[6].button("🗑️ Borrar", key=f"del_res_{row.get('ID', index)}"):
+                if cols[6].button("🗑️ Borrar", key=f"del_res_{row_id}_{index}"):
                     df_historial = df_historial.drop(index)
-                    df_historial.to_csv(RESERVAS_FILE, index=False)
-                    if st.session_state['editando_id'] == row.get('ID', index):
+                    df_historial.to_csv(RESERVAS_FILE, index=False, sep=';')
+                    if st.session_state['editando_id'] == row_id:
                         st.session_state['editando_id'] = None
                     st.toast(f"Reserva eliminada.", icon='⚠️')
                     st.rerun()
@@ -332,11 +341,14 @@ else:
             st.info("No hay reservas registradas todavía.")
 
     # ------------------------------------------
-    # TAB 4: MÉTRICAS E HISTORIAL (LIMPIO SIN BOTONES)
+    # TAB 4: MÉTRICAS E HISTORIAL
     # ------------------------------------------
     with tab4:
         st.header("Métricas de Operaciones e Historial")
-        df_dash = pd.read_csv(RESERVAS_FILE)
+        if os.path.exists(RESERVAS_FILE):
+            df_dash = pd.read_csv(RESERVAS_FILE, sep=';')
+        else:
+            df_dash = pd.DataFrame()
         
         if not df_dash.empty:
             m1, m2, m3 = st.columns(3)
@@ -372,7 +384,6 @@ else:
                 
             st.divider()
             st.subheader("📜 Historial Oficial de Registros (Solo Lectura)")
-            # Tabla limpia sin botones de acción
             st.dataframe(df_dash, use_container_width=True, height=300)
         else:
             st.info("Aún no hay datos suficientes para mostrar métricas. Registra tu primera reserva. 🚀")
@@ -391,16 +402,16 @@ else:
                     n_rol = st.selectbox("Nivel de Acceso", ["Estándar", "Administrador"])
                     
                     if st.form_submit_button("Crear Cuenta"):
-                        df_users = pd.read_csv(USERS_FILE)
+                        df_users = pd.read_csv(USERS_FILE, sep=';')
                         if n_usuario in df_users['usuario'].values:
                             st.warning("Ese usuario ya está registrado.")
                         else:
                             nuevo_user = {'usuario': n_usuario, 'password': n_pass, 'rol': n_rol}
                             df_users = pd.concat([df_users, pd.DataFrame([nuevo_user])], ignore_index=True)
-                            df_users.to_csv(USERS_FILE, index=False)
+                            df_users.to_csv(USERS_FILE, index=False, sep=';')
                             st.toast(f"Usuario {n_usuario} creado exitosamente.", icon='✅')
                             
             st.markdown("#### Usuarios Activos del Sistema")
-            st.dataframe(pd.read_csv(USERS_FILE)[['usuario', 'rol']], use_container_width=True)
+            st.dataframe(pd.read_csv(USERS_FILE, sep=';')[['usuario', 'rol']], use_container_width=True)
         else:
             st.error("⛔ Acceso Restringido solo para Administradores.")
