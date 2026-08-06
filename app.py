@@ -96,15 +96,24 @@ st.markdown("""
 USERS_FILE = 'usuarios.csv'
 RESERVAS_FILE = 'historial_reservas.csv'
 
+# Asegurar archivo de usuarios correcto
+columnas_usuarios = ['usuario', 'password', 'rol']
 if not os.path.exists(USERS_FILE):
     pd.DataFrame({'usuario': ['admin'], 'password': ['Pedregal2026'], 'rol': ['Administrador']}).to_csv(USERS_FILE, index=False, sep=';')
+else:
+    try:
+        df_u_check = pd.read_csv(USERS_FILE, sep=None, engine='python', dtype=str)
+        if not all(col in df_u_check.columns for col in columnas_usuarios):
+            pd.DataFrame({'usuario': ['admin'], 'password': ['Pedregal2026'], 'rol': ['Administrador']}).to_csv(USERS_FILE, index=False, sep=';')
+    except:
+        pd.DataFrame({'usuario': ['admin'], 'password': ['Pedregal2026'], 'rol': ['Administrador']}).to_csv(USERS_FILE, index=False, sep=';')
 
 columnas_requeridas = ['ID', 'Fecha', 'Hora', 'PEP', 'Area', 'Movimiento', 'Material', 'Cantidad']
 if not os.path.exists(RESERVAS_FILE):
     pd.DataFrame(columns=columnas_requeridas).to_csv(RESERVAS_FILE, index=False, sep=';')
 else:
     try:
-        df_check = pd.read_csv(RESERVAS_FILE, sep=';', dtype=str)
+        df_check = pd.read_csv(RESERVAS_FILE, sep=None, engine='python', dtype=str)
         if not all(col in df_check.columns for col in columnas_requeridas):
             pd.DataFrame(columns=columnas_requeridas).to_csv(RESERVAS_FILE, index=False, sep=';')
     except:
@@ -112,11 +121,17 @@ else:
 
 def check_login(username, password):
     try:
-        df_users = pd.read_csv(USERS_FILE, sep=';', dtype=str)
+        df_users = pd.read_csv(USERS_FILE, sep=None, engine='python', dtype=str)
     except:
-        df_users = pd.read_csv(USERS_FILE, sep=',', dtype=str)
+        df_users = pd.read_csv(USERS_FILE, sep=';', dtype=str)
 
-    user_match = df_users[(df_users['usuario'] == username) & (df_users['password'] == password)]
+    # Limpiar espacios en blanco en columnas por seguridad
+    df_users.columns = df_users.columns.str.strip()
+
+    if 'usuario' not in df_users.columns or 'password' not in df_users.columns:
+        return False
+
+    user_match = df_users[(df_users['usuario'].str.strip() == username.strip()) & (df_users['password'].str.strip() == password.strip())]
     if not user_match.empty:
         st.session_state['logged_in'] = True
         st.session_state['username'] = username
@@ -248,7 +263,7 @@ else:
     with tab3:
         st.header("Creación y Gestión de Reservas SAP")
         try:
-            df_historial = pd.read_csv(RESERVAS_FILE, sep=';', dtype=str)
+            df_historial = pd.read_csv(RESERVAS_FILE, sep=None, engine='python', dtype=str)
             if not all(col in df_historial.columns for col in columnas_requeridas):
                 df_historial = pd.DataFrame(columns=columnas_requeridas)
         except:
@@ -293,7 +308,6 @@ else:
                     if id_a_editar is not None:
                         mask = df_historial['ID'].astype(str) == str(id_a_editar)
                         if mask.any():
-                            # Modificación explícita convirtiendo el DataFrame a object dtype para evitar conflictos
                             df_historial = df_historial.astype(object)
                             df_historial.loc[mask, 'PEP'] = str(r_pep)
                             df_historial.loc[mask, 'Area'] = str(r_area)
@@ -368,11 +382,11 @@ else:
     with tab4:
         st.header("Métricas de Operaciones e Historial")
         try:
-            df_dash = pd.read_csv(RESERVAS_FILE, sep=';', dtype=str)
+            df_dash = pd.read_csv(RESERVAS_FILE, sep=None, engine='python', dtype=str)
             if not all(col in df_dash.columns for col in columnas_requeridas):
                 df_dash = pd.DataFrame()
             else:
-                df_dash['Cantidad'] = pd.to_numeric(df_dash['Cantidad'], errors='fillna').fillna(1)
+                df_dash['Cantidad'] = pd.to_numeric(df_dash['Cantidad'], errors='coerce').fillna(1)
         except:
             df_dash = pd.DataFrame()
         
@@ -429,9 +443,9 @@ else:
                     
                     if st.form_submit_button("Crear Cuenta"):
                         try:
-                            df_users = pd.read_csv(USERS_FILE, sep=';', dtype=str)
+                            df_users = pd.read_csv(USERS_FILE, sep=None, engine='python', dtype=str)
                         except:
-                            df_users = pd.read_csv(USERS_FILE, sep=',', dtype=str)
+                            df_users = pd.read_csv(USERS_FILE, sep=';', dtype=str)
                             
                         if n_usuario in df_users['usuario'].values:
                             st.warning("Ese usuario ya está registrado.")
@@ -443,9 +457,9 @@ else:
                             
             st.markdown("#### Usuarios Activos del Sistema")
             try:
-                df_u_show = pd.read_csv(USERS_FILE, sep=';', dtype=str)[['usuario', 'rol']]
+                df_u_show = pd.read_csv(USERS_FILE, sep=None, engine='python', dtype=str)[['usuario', 'rol']]
             except:
-                df_u_show = pd.read_csv(USERS_FILE, sep=',', dtype=str)[['usuario', 'rol']]
+                df_u_show = pd.read_csv(USERS_FILE, sep=';', dtype=str)[['usuario', 'rol']]
             st.dataframe(df_u_show, use_container_width=True)
         else:
             st.error("⛔ Acceso Restringido solo para Administradores.")
