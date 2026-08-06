@@ -259,7 +259,7 @@ else:
         id_a_editar = st.session_state['editando_id']
         datos_edit = {}
         if id_a_editar is not None and not df_historial.empty:
-            match_row = df_historial[df_historial['ID'] == id_a_editar]
+            match_row = df_historial[df_historial['ID'].astype(str) == str(id_a_editar)]
             if not match_row.empty:
                 datos_edit = match_row.iloc[0].to_dict()
                 st.info(f"✏️ Estás editando la reserva **#{id_a_editar}**")
@@ -268,15 +268,20 @@ else:
             with st.form("form_reserva", clear_on_submit=False):
                 c1, c2 = st.columns(2)
                 with c1:
-                    r_pep = st.text_input("Código PEP", value=datos_edit.get('PEP', 'PU/26.T4.C04.111.041'))
-                    r_area = st.text_input("Área / Solicitante", value=datos_edit.get('Area', ''), placeholder="Ej: Riego y Nutrición")
-                    r_material = st.text_input("Material", value=datos_edit.get('Material', ''), placeholder="Ej: Filtro de aceite / Abono")
+                    r_pep = st.text_input("Código PEP", value=str(datos_edit.get('PEP', 'PU/26.T4.C04.111.041')))
+                    r_area = st.text_input("Área / Solicitante", value=str(datos_edit.get('Area', '')), placeholder="Ej: Riego y Nutrición")
+                    r_material = st.text_input("Material", value=str(datos_edit.get('Material', '')), placeholder="Ej: Filtro de aceite / Abono")
                 with c2:
                     default_mov = str(datos_edit.get('Movimiento', '221'))
                     idx_mov = 0 if '221' in default_mov else (1 if '311' in default_mov else 2)
                     r_movimiento = st.selectbox("Clase de Movimiento", ["221 (Consumo)", "311 (Traslado)", "Otros"], index=idx_mov)
                     
-                    def_cant = int(datos_edit.get('Cantidad', 1)) if not pd.isna(datos_edit.get('Cantidad', 1)) else 1
+                    try:
+                        def_cant = int(datos_edit.get('Cantidad', 1))
+                        if pd.isna(def_cant): def_cant = 1
+                    except:
+                        def_cant = 1
+                    
                     r_cantidad = st.number_input("Cantidad", min_value=1, step=1, value=def_cant)
                     st.markdown("<br>", unsafe_allow_html=True)
                     
@@ -284,33 +289,35 @@ else:
                     submit_reserva = st.form_submit_button(btn_label, use_container_width=True)
                     
                 if submit_reserva:
-                    # Asegurar conversión segura a string de la selección
                     mov_str = str(r_movimiento)
                     mov_code = mov_str[:3] if len(mov_str) >= 3 else mov_str
 
                     if id_a_editar is not None:
-                        idx_to_update = df_historial[df_historial['ID'] == id_a_editar].index
-                        df_historial.loc[idx_to_update, 'PEP'] = r_pep
-                        df_historial.loc[idx_to_update, 'Area'] = r_area
-                        df_historial.loc[idx_to_update, 'Movimiento'] = mov_code
-                        df_historial.loc[idx_to_update, 'Material'] = r_material
-                        df_historial.loc[idx_to_update, 'Cantidad'] = r_cantidad
-                        df_historial.to_csv(RESERVAS_FILE, index=False, sep=';')
-                        st.session_state['editando_id'] = None
-                        st.success(f"¡Reserva #{id_a_editar} actualizada con éxito!")
-                        time.sleep(0.5)
-                        st.rerun()
+                        # Actualización segura por índice de fila para evitar errores de tipo en pandas
+                        mask = df_historial['ID'].astype(str) == str(id_a_editar)
+                        if mask.any():
+                            df_historial.loc[mask, 'PEP'] = str(r_pep)
+                            df_historial.loc[mask, 'Area'] = str(r_area)
+                            df_historial.loc[mask, 'Movimiento'] = str(mov_code)
+                            df_historial.loc[mask, 'Material'] = str(r_material)
+                            df_historial.loc[mask, 'Cantidad'] = int(r_cantidad)
+                            
+                            df_historial.to_csv(RESERVAS_FILE, index=False, sep=';')
+                            st.session_state['editando_id'] = None
+                            st.success(f"¡Reserva #{id_a_editar} actualizada con éxito!")
+                            time.sleep(0.5)
+                            st.rerun()
                     else:
                         nuevo_id = int(df_historial['ID'].max() + 1) if not df_historial.empty and 'ID' in df_historial.columns and not pd.isna(df_historial['ID'].max()) else 1001
                         nueva_reserva = {
                             'ID': nuevo_id,
                             'Fecha': datetime.datetime.now().strftime("%Y-%m-%d"),
                             'Hora': datetime.datetime.now().strftime("%H:%M:%S"),
-                            'PEP': r_pep,
-                            'Area': r_area,
-                            'Movimiento': mov_code,
-                            'Material': r_material,
-                            'Cantidad': r_cantidad
+                            'PEP': str(r_pep),
+                            'Area': str(r_area),
+                            'Movimiento': str(mov_code),
+                            'Material': str(r_material),
+                            'Cantidad': int(r_cantidad)
                         }
                         df_historial = pd.concat([df_historial, pd.DataFrame([nueva_reserva])], ignore_index=True)
                         df_historial.to_csv(RESERVAS_FILE, index=False, sep=';')
