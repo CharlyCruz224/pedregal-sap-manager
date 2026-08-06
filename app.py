@@ -99,14 +99,15 @@ RESERVAS_FILE = 'historial_reservas.csv'
 if not os.path.exists(USERS_FILE):
     pd.DataFrame({'usuario': ['admin'], 'password': ['Pedregal2026'], 'rol': ['Administrador']}).to_csv(USERS_FILE, index=False, sep=';')
 
-# Asegurar estructura limpia de reservas
 columnas_requeridas = ['ID', 'Fecha', 'Hora', 'PEP', 'Area', 'Movimiento', 'Material', 'Cantidad']
 if not os.path.exists(RESERVAS_FILE):
     pd.DataFrame(columns=columnas_requeridas).to_csv(RESERVAS_FILE, index=False, sep=';')
 else:
-    # Si el archivo existe pero le faltan columnas, corregirlo automáticamente
-    df_check = pd.read_csv(RESERVAS_FILE, sep=None, engine='python')
-    if not all(col in df_check.columns for col in columnas_requeridas):
+    try:
+        df_check = pd.read_csv(RESERVAS_FILE, sep=';')
+        if not all(col in df_check.columns for col in columnas_requeridas):
+            pd.DataFrame(columns=columnas_requeridas).to_csv(RESERVAS_FILE, index=False, sep=';')
+    except:
         pd.DataFrame(columns=columnas_requeridas).to_csv(RESERVAS_FILE, index=False, sep=';')
 
 def check_login(username, password):
@@ -271,8 +272,8 @@ else:
                     r_area = st.text_input("Área / Solicitante", value=datos_edit.get('Area', ''), placeholder="Ej: Riego y Nutrición")
                     r_material = st.text_input("Material", value=datos_edit.get('Material', ''), placeholder="Ej: Filtro de aceite / Abono")
                 with c2:
-                    default_mov = datos_edit.get('Movimiento', '221')
-                    idx_mov = 0 if '221' in str(default_mov) else (1 if '311' in str(default_mov) else 2)
+                    default_mov = str(datos_edit.get('Movimiento', '221'))
+                    idx_mov = 0 if '221' in default_mov else (1 if '311' in default_mov else 2)
                     r_movimiento = st.selectbox("Clase de Movimiento", ["221 (Consumo)", "311 (Traslado)", "Otros"], index=idx_mov)
                     
                     def_cant = int(datos_edit.get('Cantidad', 1)) if not pd.isna(datos_edit.get('Cantidad', 1)) else 1
@@ -283,11 +284,15 @@ else:
                     submit_reserva = st.form_submit_button(btn_label, use_container_width=True)
                     
                 if submit_reserva:
+                    # Asegurar conversión segura a string de la selección
+                    mov_str = str(r_movimiento)
+                    mov_code = mov_str[:3] if len(mov_str) >= 3 else mov_str
+
                     if id_a_editar is not None:
                         idx_to_update = df_historial[df_historial['ID'] == id_a_editar].index
                         df_historial.loc[idx_to_update, 'PEP'] = r_pep
                         df_historial.loc[idx_to_update, 'Area'] = r_area
-                        df_historial.loc[idx_to_update, 'Movimiento'] = r_movimiento[:3]
+                        df_historial.loc[idx_to_update, 'Movimiento'] = mov_code
                         df_historial.loc[idx_to_update, 'Material'] = r_material
                         df_historial.loc[idx_to_update, 'Cantidad'] = r_cantidad
                         df_historial.to_csv(RESERVAS_FILE, index=False, sep=';')
@@ -303,7 +308,7 @@ else:
                             'Hora': datetime.datetime.now().strftime("%H:%M:%S"),
                             'PEP': r_pep,
                             'Area': r_area,
-                            'Movimiento': r_movimiento[:3],
+                            'Movimiento': mov_code,
                             'Material': r_material,
                             'Cantidad': r_cantidad
                         }
