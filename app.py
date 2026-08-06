@@ -104,7 +104,7 @@ if not os.path.exists(RESERVAS_FILE):
     pd.DataFrame(columns=columnas_requeridas).to_csv(RESERVAS_FILE, index=False, sep=';')
 else:
     try:
-        df_check = pd.read_csv(RESERVAS_FILE, sep=';')
+        df_check = pd.read_csv(RESERVAS_FILE, sep=';', dtype=str)
         if not all(col in df_check.columns for col in columnas_requeridas):
             pd.DataFrame(columns=columnas_requeridas).to_csv(RESERVAS_FILE, index=False, sep=';')
     except:
@@ -112,13 +112,11 @@ else:
 
 def check_login(username, password):
     try:
-        df_users = pd.read_csv(USERS_FILE, sep=';')
-        if 'usuario' not in df_users.columns:
-            df_users = pd.read_csv(USERS_FILE, sep=',')
+        df_users = pd.read_csv(USERS_FILE, sep=';', dtype=str)
     except:
-        df_users = pd.read_csv(USERS_FILE, sep=',')
+        df_users = pd.read_csv(USERS_FILE, sep=',', dtype=str)
 
-    user_match = df_users[(df_users['usuario'].astype(str) == username) & (df_users['password'].astype(str) == password)]
+    user_match = df_users[(df_users['usuario'] == username) & (df_users['password'] == password)]
     if not user_match.empty:
         st.session_state['logged_in'] = True
         st.session_state['username'] = username
@@ -250,7 +248,7 @@ else:
     with tab3:
         st.header("Creación y Gestión de Reservas SAP")
         try:
-            df_historial = pd.read_csv(RESERVAS_FILE, sep=';')
+            df_historial = pd.read_csv(RESERVAS_FILE, sep=';', dtype=str)
             if not all(col in df_historial.columns for col in columnas_requeridas):
                 df_historial = pd.DataFrame(columns=columnas_requeridas)
         except:
@@ -293,14 +291,15 @@ else:
                     mov_code = mov_str[:3] if len(mov_str) >= 3 else mov_str
 
                     if id_a_editar is not None:
-                        # Actualización segura por índice de fila para evitar errores de tipo en pandas
                         mask = df_historial['ID'].astype(str) == str(id_a_editar)
                         if mask.any():
+                            # Modificación explícita convirtiendo el DataFrame a object dtype para evitar conflictos
+                            df_historial = df_historial.astype(object)
                             df_historial.loc[mask, 'PEP'] = str(r_pep)
                             df_historial.loc[mask, 'Area'] = str(r_area)
                             df_historial.loc[mask, 'Movimiento'] = str(mov_code)
                             df_historial.loc[mask, 'Material'] = str(r_material)
-                            df_historial.loc[mask, 'Cantidad'] = int(r_cantidad)
+                            df_historial.loc[mask, 'Cantidad'] = str(r_cantidad)
                             
                             df_historial.to_csv(RESERVAS_FILE, index=False, sep=';')
                             st.session_state['editando_id'] = None
@@ -308,16 +307,16 @@ else:
                             time.sleep(0.5)
                             st.rerun()
                     else:
-                        nuevo_id = int(df_historial['ID'].max() + 1) if not df_historial.empty and 'ID' in df_historial.columns and not pd.isna(df_historial['ID'].max()) else 1001
+                        nuevo_id = int(df_historial['ID'].astype(int).max() + 1) if not df_historial.empty and 'ID' in df_historial.columns and not df_historial['ID'].dropna().empty else 1001
                         nueva_reserva = {
-                            'ID': nuevo_id,
+                            'ID': str(nuevo_id),
                             'Fecha': datetime.datetime.now().strftime("%Y-%m-%d"),
                             'Hora': datetime.datetime.now().strftime("%H:%M:%S"),
                             'PEP': str(r_pep),
                             'Area': str(r_area),
                             'Movimiento': str(mov_code),
                             'Material': str(r_material),
-                            'Cantidad': int(r_cantidad)
+                            'Cantidad': str(r_cantidad)
                         }
                         df_historial = pd.concat([df_historial, pd.DataFrame([nueva_reserva])], ignore_index=True)
                         df_historial.to_csv(RESERVAS_FILE, index=False, sep=';')
@@ -369,9 +368,11 @@ else:
     with tab4:
         st.header("Métricas de Operaciones e Historial")
         try:
-            df_dash = pd.read_csv(RESERVAS_FILE, sep=';')
+            df_dash = pd.read_csv(RESERVAS_FILE, sep=';', dtype=str)
             if not all(col in df_dash.columns for col in columnas_requeridas):
                 df_dash = pd.DataFrame()
+            else:
+                df_dash['Cantidad'] = pd.to_numeric(df_dash['Cantidad'], errors='fillna').fillna(1)
         except:
             df_dash = pd.DataFrame()
         
@@ -428,9 +429,9 @@ else:
                     
                     if st.form_submit_button("Crear Cuenta"):
                         try:
-                            df_users = pd.read_csv(USERS_FILE, sep=';')
+                            df_users = pd.read_csv(USERS_FILE, sep=';', dtype=str)
                         except:
-                            df_users = pd.read_csv(USERS_FILE, sep=',')
+                            df_users = pd.read_csv(USERS_FILE, sep=',', dtype=str)
                             
                         if n_usuario in df_users['usuario'].values:
                             st.warning("Ese usuario ya está registrado.")
@@ -442,9 +443,9 @@ else:
                             
             st.markdown("#### Usuarios Activos del Sistema")
             try:
-                df_u_show = pd.read_csv(USERS_FILE, sep=';')[['usuario', 'rol']]
+                df_u_show = pd.read_csv(USERS_FILE, sep=';', dtype=str)[['usuario', 'rol']]
             except:
-                df_u_show = pd.read_csv(USERS_FILE, sep=',')[['usuario', 'rol']]
+                df_u_show = pd.read_csv(USERS_FILE, sep=',', dtype=str)[['usuario', 'rol']]
             st.dataframe(df_u_show, use_container_width=True)
         else:
             st.error("⛔ Acceso Restringido solo para Administradores.")
